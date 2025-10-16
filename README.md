@@ -476,6 +476,7 @@ vsce publish -p YOUR_TOKEN --packagePath xsltdebugger-windows-*.vsix
 
 ```
 
+
 XsltDebugger/
 ├── src/ # TypeScript extension source
 │ ├── extension.ts # Main extension entry point
@@ -488,6 +489,9 @@ XsltDebugger/
 │ └── XsltInstrumenter.cs # Debugging instrumentation
 ├── XsltDebugger.Tests/ # C# unit tests
 └── package.json # Extension manifest
+
+
+
 
 ```
 
