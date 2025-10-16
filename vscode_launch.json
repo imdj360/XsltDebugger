@@ -1,0 +1,39 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+     "type": "xslt",
+      "request": "launch", 
+      "name": "Debug XSLT Saxonnet",
+      "engine":"saxonnet",
+      "stylesheet": "${workspaceFolder}/ShipmentConfv2.xslt",
+      "xml": "${workspaceFolder}/ShipmentConf.xml",
+      "stopOnEntry": true,
+      "debug": true,
+      "logLevel": "log"
+    },
+    {
+     "type": "xslt",
+      "request": "launch", 
+      "name": "Debug XSLT Compiled",
+      "engine":"compiled",
+      "stylesheet": "${workspaceFolder}/ShipmentConfv1.xslt",
+      "xml": "${workspaceFolder}/ShipmentConf.xml",
+      "stopOnEntry": true,
+      "debug": true,
+      "logLevel": "trace"
+    },
+     {
+     "type": "xslt",
+      "request": "launch", 
+      "name": "Debug XSLT Saxonnet NS",
+      "engine":"saxonnet",
+      "stylesheet": "${workspaceFolder}/ShipmentConfv2_ns.xslt",
+      "xml": "${workspaceFolder}/ShipmentConf_ns.xml",
+      "stopOnEntry": true,
+      "debug": true,
+      "logLevel": "log"
+    }
+
+  ]
+}
