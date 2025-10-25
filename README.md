@@ -515,6 +515,7 @@ vsce publish -p YOUR_TOKEN --packagePath xsltdebugger-windows-win32-x64-0.5.0.vs
 ### Project Structure
 
 ```
+
 XsltDebugger/
 ├── src/                           # TypeScript extension source
 │   ├── extension.ts               # Main extension entry point
@@ -536,6 +537,8 @@ XsltDebugger/
 ├── TestData/                      # Centralized test data
 │   └── Integration/               # Integration test XSLT & XML files
 └── package.json                   # Extension manifest
+
+
 ```
 
 ## License
