@@ -3,7 +3,7 @@ This Repo to capture user feedback and track issue.
 
 --------
 
-## XSLT Debugger for Visual Studio Code
+# XSLT Debugger for Visual Studio Code
 
 A powerful Visual Studio Code extension that enables debugging support for XSLT stylesheets. Set breakpoints, step through transformations, inspect variables, and evaluate XPath expressions in real-time using a .NET-based debug adapter.
 
@@ -28,11 +28,12 @@ A powerful Visual Studio Code extension that enables debugging support for XSLT 
 ## Features
 
 - **Breakpoint Support**: Set breakpoints in XSLT files and step through transformations
-- **Variable Inspection**: Inspect XSLT context, variables, and XML node values
+- **Variable Inspection**: Automatically materialises XSLT variables and context nodes inside VS Code’s VARIABLES pane
 - **XPath Evaluation**: Evaluate XPath expressions in the current context
 - **Inline C# Scripting**: Debug XSLT stylesheets with embedded C# code using Roslyn
 - **Multiple Engines**: Support for compiled XSLT engine (XSLT 1.0) and Saxon engine (XSLT 2.0/3.0)
 - **Cross-Platform**: Works on Windows, macOS, and Linux
+- **Probe Tagging**: Instrumented breakpoints and trace messages are tagged with `dbg:probe="1"` so repeated runs stay idempotent
 
 ## XSLT Processing Engines
 
@@ -44,7 +45,7 @@ The debugger supports two engines to handle different XSLT versions and use case
 | --------------------- | ---------------------------------------------------------- |
 | **XSLT Version**      | 1.0                                                        |
 | **Special Features**  | Inline C# scripting via `msxsl:script`                     |
-| **Debugging Support** | Full breakpoint and step-through debugging                 |
+| **Debugging Support** | Breakpoints via `dbg:break()` inline instruction; no `xsl:message` injection |
 | **Platform Support**  | Windows, macOS, Linux                                      |
 | **Best For**          | XSLT 1.0 stylesheets, especially those with inline C# code |
 
@@ -55,7 +56,7 @@ The debugger supports two engines to handle different XSLT versions and use case
 | **XSLT Version**      | 2.0 and 3.0                                                                     |
 | **Implementation**    | SaxonHE10Net31Api (community IKVM build)                                        |
 | **XPath Support**     | 2.0 and 3.0                                                                     |
-| **Debugging Support** | Transform execution (breakpoint debugging in development)                       |
+| **Debugging Support** | Breakpoints + variable tracing through `dbg:break()` and `xsl:message` probes    |
 | **Platform Support**  | Windows, macOS, Linux                                                           |
 | **License**           | Mozilla Public License 2.0 (free and open source)                               |
 | **Best For**          | Modern XSLT 2.0/3.0 stylesheets (same approach as Azure Logic Apps Data Mapper) |
@@ -100,10 +101,10 @@ These tradeoffs ensure reliable, cross-platform debugging without slowing down t
 
    ```bash
    # macOS
-   code --install-extension xsltdebugger-darwin-0.0.3.vsix
+   code --install-extension xsltdebugger-darwin-darwin-arm64-0.5.0.vsix
 
    # Windows
-   code --install-extension xsltdebugger-windows-0.0.3.vsix
+   code --install-extension xsltdebugger-windows-win32-x64-0.5.0.vsix
    ```
 
 2. **Create a debug configuration** in [.vscode/launch.json](#setting-up-a-debug-configuration)
@@ -118,6 +119,7 @@ These tradeoffs ensure reliable, cross-platform debugging without slowing down t
    npm install
    npm run compile
    dotnet build ./XsltDebugger.DebugAdapter
+   dotnet test ./XsltDebugger.Tests/XsltDebugger.Tests.csproj -v minimal
    ```
 
 2. **Run the Extension Development Host**:
@@ -127,23 +129,23 @@ These tradeoffs ensure reliable, cross-platform debugging without slowing down t
 
 3. **Package and install locally**:
 
-   **Platform-specific packaging** (optimized size, only includes binaries for target platform):
+   **Build both platforms at once** (recommended):
 
    ```bash
-   # For macOS
-   ./package-darwin.sh
-   code --install-extension xsltdebugger-darwin-*.vsix
-
-   # For Windows
-   ./package-win.sh
-   code --install-extension xsltdebugger-windows-*.vsix
+   ./package-all.sh
+   code --install-extension xsltdebugger-darwin-darwin-arm64-0.5.0.vsix
    ```
 
-   **Universal packaging** (includes all platforms, larger file size):
+   **Platform-specific packaging** (build individually):
 
    ```bash
-   npx vsce package
-   code --install-extension xsltdebugger-*.vsix
+   # For macOS only
+   ./package-darwin.sh
+   code --install-extension xsltdebugger-darwin-darwin-arm64-0.5.0.vsix
+
+   # For Windows only
+   ./package-win.sh
+   code --install-extension xsltdebugger-windows-win32-x64-0.5.0.vsix
    ```
 
 ## Usage
@@ -355,44 +357,84 @@ The debugger supports XSLT stylesheets with embedded C# code using `msxsl:script
 
 ## Architecture
 
-The extension is built on three main components:
+The workflow is split between a lightweight VS Code entry point and a .NET debug adapter that owns execution and instrumentation.
 
-1. **TypeScript Extension** ([src/extension.ts](src/extension.ts))
+```
+┌─────────────────────────────┐
+│   VS Code Extension (TS)    │
+│   src/extension.ts          │
+│   • resolves configs        │
+│   • launches adapter        │
+└───────────────┬─────────────┘
+                │ DAP over stdio
+┌───────────────▼─────────────┐
+│     .NET Debug Adapter       │
+│  XsltDebugger.DebugAdapter   │
+│ ┌──────────────────────────┐ │
+│ │        DapServer         │ │
+│ │  maps DAP ⇄ engine APIs  │ │
+│ └───────────┬──────────────┘ │
+│             │                 │
+│    ┌────────▼────────┐        │
+│    │XsltEngineManager│        │
+│    │ state + logging │        │
+│    └────────┬────────┘        │
+│             │                 │
+│ ┌───────────▼──────────┐      │
+│ │  XsltEngineFactory   │      │
+│ └──────┬────────┬──────┘      │
+│        │        │             │
+│  ┌─────▼┐   ┌───▼───────┐     │
+│  │Compiled│ │  Saxon    │     │
+│  │Engine  │ │  Engine   │     │
+│  └──┬────┘ └──┬────────┘     │
+│     │         │               │
+│  dbg:break via │speedy XPath  │
+│  XsltDebugExt  │SaxonDebugExt │
+└─────┴──────────┴──────────────┘
+```
 
-   - VS Code integration layer
-   - Debug configuration provider
-   - Debug adapter factory
-
-2. **C# Debug Adapter** ([XsltDebugger.DebugAdapter/](XsltDebugger.DebugAdapter/))
-
-   - Implements Debug Adapter Protocol (DAP)
-   - XSLT execution engines (compiled and Saxon .NET)
-   - Breakpoint management and stepping logic
-
-3. **Instrumentation Engine** ([XsltDebugger.DebugAdapter/XsltInstrumenter.cs](XsltDebugger.DebugAdapter/XsltInstrumenter.cs))
-   - Dynamically modifies XSLT to insert debug hooks
-   - Captures execution context at breakpoints
-   - Enables variable inspection
+- **TypeScript extension** wires the debug type, resolves `${workspace}` paths, and launches the adapter (`dotnet XsltDebugger.DebugAdapter.dll`).
+- **DapServer** owns the Debug Adapter Protocol: `launch`, `setBreakpoints`, `variables`, `evaluate`, etc., and forwards them through `XsltEngineManager`.
+- **XsltEngineManager** tracks the current engine, breakpoints, stop reasons, and captured variables. It exposes events the adapter translates into DAP notifications.
+- **Engine factory** chooses between:
+  - `XsltCompiledEngine` (XslCompiledTransform) for XSLT 1.0 and inline C#. It rewrites the DOM with `<xsl:value-of select="dbg:break(...)">` plus tagged `xsl:message` instructions.
+  - `SaxonEngine` (Saxon HE via IKVM) for XSLT 2.0/3.0. It injects `<xsl:sequence select="dbg:break(...) dbg:probe='1'"/>` so functions and advanced constructs remain side-effect free. `SaxonDebugExtension` exposes the `dbg:break()` function that raises breakpoints back to the adapter.
+- **Tests** (`XsltDebugger.Tests`) run the adapter engines end-to-end with real XSLT samples (guardrails, advanced v2/v3, inline C#) to ensure instrumentation and logging stay consistent.
 
 ## What's New
 
 See the [CHANGELOG](CHANGELOG.md) for detailed version history.
 
-### Latest Release: v0.0.3
+### Latest Release: v0.5.0
 
-**Saxon .NET Engine Improvements**
+**Test Infrastructure & Code Quality Improvements**
 
-- Fixed compatibility issues with .NET 8+ using SaxonHE10Net31Api (community IKVM build)
-- XSLT 2.0/3.0 support now works cross-platform without Java
-- Same reliable approach used by Azure Logic Apps Data Mapper
+- Centralized test data to `TestData/Integration/` folder at repository root for better organization
+- All test projects now reference common test data location
+- Enhanced test coverage with 105 passing integration and unit tests
+- Improved ConsoleTest project with unified engine support (both Compiled and Saxon)
 
-**Key Features**
+**Variable Debugging Enhancements**
 
-- Full debugging support for XSLT 1.0 with breakpoints and stepping
-- Transform execution for XSLT 2.0/3.0 (breakpoint debugging in development)
-- Inline C# scripting with `msxsl:script`
-- Variable inspection and XPath evaluation
-- Configurable log levels for troubleshooting
+- Enhanced variable instrumentation for both Compiled and Saxon engines
+- Improved variable capture and display in VS Code Variables panel
+- Better support for XSLT 2.0/3.0 variable debugging with Saxon engine
+- Added `CompiledMessageHandler` for enhanced compiled engine debugging
+
+**Engine Improvements**
+
+- Unified console testing with `ProgramUsingEngineType.cs` supporting both engines
+- Better breakpoint context information and handling
+- Enhanced xsl:message support for debugging output
+- Improved XSLT 2.0/3.0 features support including accumulators
+
+**Developer Experience**
+
+- Platform-specific packaging with optimized binary sizes
+- Updated build scripts for both macOS (darwin-arm64) and Windows (win32-x64)
+- Comprehensive integration tests for both engines
+- Better documentation and code organization
 
 ## Contributing
 
@@ -424,12 +466,10 @@ dotnet build XsltDebugger.DebugAdapter/
 # Run tests
 dotnet test XsltDebugger.Tests/
 
-# Package for testing (platform-specific)
-./package-darwin.sh      # macOS
-./package-win.sh         # Windows
-
-# Or package universal (all platforms)
-npx vsce package
+# Package for testing
+./package-all.sh         # Build both macOS and Windows (recommended)
+./package-darwin.sh      # macOS only
+./package-win.sh         # Windows only
 ```
 
 ### Platform-Specific Packaging
@@ -438,10 +478,11 @@ The extension supports platform-specific packaging to reduce file size by includ
 
 #### Package Scripts
 
-| Script                                 | Platform | Extension Name         | Includes                |
-| -------------------------------------- | -------- | ---------------------- | ----------------------- |
-| [package-darwin.sh](package-darwin.sh) | macOS    | `xsltdebugger-darwin`  | osx-arm64 binaries only |
-| [package-win.sh](package-win.sh)       | Windows  | `xsltdebugger-windows` | win-x64 binaries only   |
+| Script                               | Platform        | Extension Name         | Includes                |
+| ------------------------------------ | --------------- | ---------------------- | ----------------------- |
+| [package-all.sh](package-all.sh)     | macOS + Windows | Both platforms         | Builds both packages    |
+| [package-darwin.sh](package-darwin.sh) | macOS         | `xsltdebugger-darwin`  | osx-arm64 binaries only |
+| [package-win.sh](package-win.sh)     | Windows         | `xsltdebugger-windows` | win-x64 binaries only   |
 
 #### How It Works
 
@@ -455,13 +496,12 @@ Each packaging script:
 #### Publishing to Marketplace
 
 ```bash
-# Build platform-specific packages
-./package-darwin.sh
-./package-win.sh
+# Build both platform packages
+./package-all.sh
 
 # Publish each as a separate extension
-vsce publish -p YOUR_TOKEN --packagePath xsltdebugger-darwin-*.vsix
-vsce publish -p YOUR_TOKEN --packagePath xsltdebugger-windows-*.vsix
+vsce publish -p YOUR_TOKEN --packagePath xsltdebugger-darwin-darwin-arm64-0.5.0.vsix
+vsce publish -p YOUR_TOKEN --packagePath xsltdebugger-windows-win32-x64-0.5.0.vsix
 ```
 
 **Benefits:**
@@ -475,29 +515,39 @@ vsce publish -p YOUR_TOKEN --packagePath xsltdebugger-windows-*.vsix
 ### Project Structure
 
 ```
-
-
 XsltDebugger/
-├── src/ # TypeScript extension source
-│ ├── extension.ts # Main extension entry point
-│ └── test/ # Extension tests
-├── XsltDebugger.DebugAdapter/ # C# debug adapter
-│ ├── Program.cs # Debug adapter entry point
-│ ├── XsltDebugSession.cs # DAP implementation
-│ ├── CompiledEngine.cs # XSLT 1.0 engine
-│ ├── SaxonEngine.cs # XSLT 2.0/3.0 engine
-│ └── XsltInstrumenter.cs # Debugging instrumentation
-├── XsltDebugger.Tests/ # C# unit tests
-└── package.json # Extension manifest
-
-
-
-
+├── src/                           # TypeScript extension source
+│   ├── extension.ts               # Main extension entry point
+│   └── test/                      # Extension tests
+├── XsltDebugger.DebugAdapter/     # C# debug adapter
+│   ├── Program.cs                 # Debug adapter entry point
+│   ├── DapServer.cs               # DAP protocol implementation
+│   ├── XsltCompiledEngine.cs      # XSLT 1.0 engine with inline C#
+│   ├── SaxonEngine.cs             # XSLT 2.0/3.0 Saxon engine
+│   ├── CompiledMessageHandler.cs  # Message handling for compiled engine
+│   ├── SaxonDebugExtension.cs     # Debug extension for Saxon
+│   └── XsltEngineManager.cs       # Engine state management
+├── XsltDebugger.Tests/            # C# integration & unit tests (105 tests)
+│   ├── CompiledEngineIntegrationTests.cs
+│   ├── SaxonEngineIntegrationTests.cs
+│   └── [other test files]
+├── XsltDebugger.ConsoleTest/      # Console test harness
+│   └── ProgramUsingEngineType.cs  # Unified engine testing
+├── TestData/                      # Centralized test data
+│   └── Integration/               # Integration test XSLT & XML files
+└── package.json                   # Extension manifest
 ```
 
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+### Third-Party Licenses
+
+- **SaxonHE10Net31Api**: Mozilla Public License 2.0 (Martin Honnen's community IKVM build)
+```
+- **Variable Capture via `xsl:message`**: For the Saxon engine, `<xsl:message select="('[DBG]', '$var', …)" dbg:probe="1"/>` is emitted around safe variables and loops so captured values appear in the VARIABLES view without mutating the result tree.
+
 
 ### Third-Party Licenses
 
