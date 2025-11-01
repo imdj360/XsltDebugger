@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ship:ShipmentSummary xmlns:dbg="urn:xslt-debugger" xmlns:ship="urn:shipment-summary">
+   <ship:Reference>REF-REDACTED</ship:Reference>
+   <ship:Totals>
+      <ship:OrderCount>2</ship:OrderCount>
+      <ship:LastReportDate>2025-06-15T06:30:00 2025-07-16T00:00:00</ship:LastReportDate>
+   </ship:Totals>
+   <ship:Orders>
+      <ship:Order>
+         <ship:Sequence>10</ship:Sequence>
+         <ship:Operation>Load truck</ship:Operation>
+         <ship:LatestReport>2025-06-15T06:30:00</ship:LatestReport>
+      </ship:Order>
+      <ship:Order>
+         <ship:Sequence>20</ship:Sequence>
+         <ship:Operation>Second load</ship:Operation>
+         <ship:LatestReport>2025-07-16T00:00:00</ship:LatestReport>
+      </ship:Order>
+   </ship:Orders>
+</ship:ShipmentSummary>
