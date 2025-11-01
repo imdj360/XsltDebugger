@@ -1,0 +1,1 @@
+﻿<?xml version="1.0" encoding="utf-8"?><result xmlns:myeval="urn:my-ext-eval" xmlns:dbg="urn:xslt-debugger"><item>First</item><item>Second</item><item>Third</item><sorted-item>High</sorted-item><sorted-item>Medium</sorted-item><sorted-item>Low</sorted-item></result>
